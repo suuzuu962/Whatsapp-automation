@@ -102,3 +102,12 @@ export function phoneVariants(sanitized: string): string[] {
 export function isRecipientNotAllowedError(message: string): boolean {
   return /131030|not in allowed list|not in the allowed list/i.test(message)
 }
+
+/**
+ * User-facing explanation for isRecipientNotAllowedError, shown instead
+ * of Meta's raw error text so operators know this is a Meta dashboard
+ * configuration step, not a bug or a bad phone number.
+ */
+export function recipientNotAllowedMessage(): string {
+  return 'This number hasn\'t been approved to receive messages from your WhatsApp test number yet. In Meta App Dashboard → WhatsApp → API Setup, add it under "To" recipients, then try again.'
+}

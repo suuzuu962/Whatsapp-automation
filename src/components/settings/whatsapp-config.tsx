@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   Eye,
@@ -156,6 +156,16 @@ export function WhatsAppConfig() {
     }
   }, [supabase]);
 
+  // Guards against re-fetching (and clobbering in-progress, unsaved
+  // form input) every time useAuth's background session refresh fires
+  // onAuthStateChange — that toggles `profileLoading` false→true→false
+  // again with the *same* accountId, which would otherwise re-trigger
+  // this effect and overwrite whatever the user just typed with what's
+  // still saved in the DB. Only fetch once per distinct account id;
+  // `handleSave`/`handleReset` call `fetchConfig` directly when they
+  // actually need a fresh read.
+  const fetchedAccountRef = useRef<string | null>(null);
+
   useEffect(() => {
     // Need both the auth session (`!authLoading`) AND the profile
     // (`!profileLoading`, which carries `accountId`). Without the
@@ -167,6 +177,8 @@ export function WhatsAppConfig() {
       setLoading(false);
       return;
     }
+    if (fetchedAccountRef.current === accountId) return;
+    fetchedAccountRef.current = accountId;
     fetchConfig(accountId);
   }, [authLoading, profileLoading, user, accountId, fetchConfig]);
 
@@ -443,30 +455,50 @@ export function WhatsAppConfig() {
             Credentials being valid is necessary but not sufficient;
             without a successful /register call the number won't
             receive inbound events. Surface this dimension separately
-            so users don't trust a misleading green banner. */}
+            so users don't trust a misleading green banner.
+            Three distinct states, not two — a Meta TEST number never
+            registers (registered_at stays null) but IS already
+            receiving events, same as a real failed attempt would look
+            identical (registered_at also null) without this split.
+            Only an actual `last_registration_error` from a real /register
+            call is treated as something the user needs to act on;
+            "no error, just never registered" reads as neutral/expected,
+            not an alarm — see registrationSkipped in
+            /api/whatsapp/config's POST handler. */}
         {config && (
           <Alert
             className={
               isRegistered
                 ? 'bg-emerald-950/30 border-emerald-700/50'
-                : 'bg-amber-950/30 border-amber-700/50'
+                : lastRegistrationError
+                  ? 'bg-amber-950/30 border-amber-700/50'
+                  : 'bg-muted border-border'
             }
           >
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 {isRegistered ? (
                   <CheckCircle2 className="size-4 text-emerald-400" />
-                ) : (
+                ) : lastRegistrationError ? (
                   <AlertTriangle className="size-4 text-amber-400" />
+                ) : (
+                  <CheckCircle2 className="size-4 text-muted-foreground" />
                 )}
                 <AlertTitle
                   className={
-                    'mb-0 ' + (isRegistered ? 'text-emerald-200' : 'text-amber-200')
+                    'mb-0 ' +
+                    (isRegistered
+                      ? 'text-emerald-200'
+                      : lastRegistrationError
+                        ? 'text-amber-200'
+                        : 'text-foreground')
                   }
                 >
                   {isRegistered
                     ? 'Registered — Meta will deliver events to wacrm'
-                    : 'Not registered — Meta will not deliver events'}
+                    : lastRegistrationError
+                      ? 'Registration attempt failed'
+                      : 'Registration not required'}
                 </AlertTitle>
               </div>
               <Button
@@ -505,10 +537,13 @@ export function WhatsAppConfig() {
                 </>
               ) : (
                 <>
-                  This number was saved before registration tracking
-                  existed, or registration was skipped. Enter the
-                  2-step PIN below and click Save Configuration to
-                  subscribe it.
+                  No PIN was supplied, so registration was skipped — this is
+                  expected and fine for a{' '}
+                  <strong className="text-foreground">Meta test number</strong>,
+                  which is pre-registered by Meta and already receives events
+                  without this step. Only enter a 2-step verification PIN
+                  below if this is a production number under a shared WABA
+                  and events stop arriving.
                 </>
               )}
             </AlertDescription>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag } from '@/types';
@@ -39,6 +40,7 @@ import {
   Plus,
   Upload,
   MoreHorizontal,
+  MessageSquare,
   Pencil,
   Trash2,
   Loader2,
@@ -49,6 +51,7 @@ import {
   Filter,
   X,
 } from 'lucide-react';
+import { NewConversationDialog } from '@/components/inbox/new-conversation-dialog';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
 import { ImportModal } from '@/components/contacts/import-modal';
@@ -65,6 +68,7 @@ interface ContactWithTags extends Contact {
 
 export default function ContactsPage() {
   const supabase = createClient();
+  const router = useRouter();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
 
@@ -83,6 +87,7 @@ export default function ContactsPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [messageContact, setMessageContact] = useState<Contact | null>(null);
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
@@ -659,6 +664,18 @@ export default function ContactsPage() {
                         align="end"
                         className="bg-popover border-border"
                       >
+                        {canEdit && (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMessageContact(contact);
+                            }}
+                            className="text-popover-foreground focus:bg-muted focus:text-foreground"
+                          >
+                            <MessageSquare className="size-4" />
+                            Message
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem
                           onClick={(e) => {
                             e.stopPropagation();
@@ -753,6 +770,25 @@ export default function ContactsPage() {
         onOpenChange={setImportOpen}
         onImported={fetchContacts}
       />
+
+      {/* Start a new WhatsApp conversation with this contact */}
+      {messageContact && (
+        <NewConversationDialog
+          open={!!messageContact}
+          onOpenChange={(open) => {
+            if (!open) setMessageContact(null);
+          }}
+          initialContact={{
+            id: messageContact.id,
+            phone: messageContact.phone,
+            name: messageContact.name,
+          }}
+          onCreated={(conversationId) => {
+            setMessageContact(null);
+            router.push(`/inbox?c=${conversationId}`);
+          }}
+        />
+      )}
 
       {/* Custom Fields Manager (admin+) */}
       {canEditSettings && (

@@ -13,6 +13,7 @@ import {
   isValidE164,
   phoneVariants,
   isRecipientNotAllowedError,
+  recipientNotAllowedMessage,
 } from '@/lib/whatsapp/phone-utils'
 import {
   checkRateLimit,
@@ -350,6 +351,12 @@ export async function POST(request: Request) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown Meta API error'
       console.error('Meta API send failed for all variants:', message)
+      if (isRecipientNotAllowedError(message)) {
+        return NextResponse.json(
+          { error: recipientNotAllowedMessage(), code: 'recipient_not_allowed' },
+          { status: 403 }
+        )
+      }
       return NextResponse.json(
         { error: `Meta API error: ${message}` },
         { status: 502 }

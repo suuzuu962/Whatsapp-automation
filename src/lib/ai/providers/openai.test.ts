@@ -113,6 +113,24 @@ describe("openai provider — generateReply", () => {
     });
   });
 
+  it("omits tools/tool_choice entirely when called with no tools, rather than sending an empty array (OpenAI rejects tools: [])", async () => {
+    let captured: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        captured = JSON.parse(String(init.body));
+        return new Response(
+          JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }] }),
+          { status: 200 },
+        );
+      }),
+    );
+    const provider = createOpenAiProvider("test-key");
+    await provider.generateReply({ systemPrompt: "sys", history: [], tools: [] });
+    expect(captured).not.toHaveProperty("tools");
+    expect(captured).not.toHaveProperty("tool_choice");
+  });
+
   it("throws RecoverableProviderError on a 500 so the router can fall through", async () => {
     vi.stubGlobal(
       "fetch",

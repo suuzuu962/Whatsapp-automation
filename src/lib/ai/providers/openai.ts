@@ -37,6 +37,15 @@ function toWireTools(tools: ToolSchema[]) {
   }));
 }
 
+/** OpenAI's Chat Completions API rejects a request with `tools: []` —
+ *  it must be omitted entirely when there are none (e.g. the wizard's
+ *  extract-from-description call, which never uses tools), not just
+ *  empty. `tool_choice` is invalid without `tools` for the same reason. */
+function toolsWireFields(tools: ToolSchema[]): Record<string, unknown> {
+  if (tools.length === 0) return {};
+  return { tools: toWireTools(tools), tool_choice: "auto" };
+}
+
 function toWireHistory(history: ChatMessage[]): OpenAiMessage[] {
   return history.map((m) => ({ role: m.role, content: m.content }));
 }
@@ -111,8 +120,7 @@ export function createOpenAiProvider(
           { role: "system", content: input.systemPrompt },
           ...toWireHistory(input.history),
         ],
-        tools: toWireTools(input.tools),
-        tool_choice: "auto",
+        ...toolsWireFields(input.tools),
       });
     },
 
@@ -142,8 +150,7 @@ export function createOpenAiProvider(
           assistantToolCallMessage,
           ...toolResultMessages,
         ],
-        tools: toWireTools(input.tools),
-        tool_choice: "auto",
+        ...toolsWireFields(input.tools),
       });
     },
   };

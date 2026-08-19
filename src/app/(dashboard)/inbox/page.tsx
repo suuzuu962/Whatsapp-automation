@@ -8,6 +8,7 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
+import { NewConversationDialog } from "@/components/inbox/new-conversation-dialog";
 import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ export default function InboxPage() {
    * once on conversationId-change as usual.
    */
   const [resyncToken, setResyncToken] = useState(0);
+  const [newConversationOpen, setNewConversationOpen] = useState(false);
 
   /**
    * Whether the desktop contact sidebar (tags / deals / notes) is shown.
@@ -471,6 +473,20 @@ export default function InboxPage() {
     [activeConversation?.id, router]
   );
 
+  // Fired after NewConversationDialog successfully starts a
+  // conversation. The list doesn't have this conversation locally yet,
+  // so we can't call handleSelectConversation directly — instead bump
+  // resyncToken to force ConversationList to refetch, and set the URL
+  // so the existing deep-link auto-selector (handleConversationsLoaded
+  // above) picks it up once the refetch lands it in `loaded`.
+  const handleConversationCreated = useCallback(
+    (conversationId: string) => {
+      setResyncToken((n) => n + 1);
+      router.replace(`/inbox?c=${conversationId}`, { scroll: false });
+    },
+    [router]
+  );
+
   // Mobile "back" — deselect the conversation so the list pane comes
   // back. Also clears the ?c= param so a refresh lands on the list
   // instead of re-opening the thread the user just backed out of.
@@ -585,8 +601,15 @@ export default function InboxPage() {
             conversations={conversations}
             onConversationsLoaded={handleConversationsLoaded}
             resyncToken={resyncToken}
+            onNewConversation={() => setNewConversationOpen(true)}
           />
         </div>
+
+        <NewConversationDialog
+          open={newConversationOpen}
+          onOpenChange={setNewConversationOpen}
+          onCreated={handleConversationCreated}
+        />
 
         {/* Center panel: Message thread.
             Hidden on mobile when no conversation is selected so the
